@@ -6,12 +6,11 @@ var cp = require( "child_process" ),
 
 module.exports = function( _, anvil ) {
 
-	var startsWith = function(orig, compare, sliceLength) {
-		sliceLength = sliceLength || compare.length;
-		return orig.slice( 0, sliceLength ) === compare;
+	var startsWith = function( orig, compare ) {
+		return orig.slice( 0, compare.length ) === compare;
 	},
 
-	resolve_path = function(filepath) {
+	resolve_path = function( filepath ) {
 		// Check for path substitutions
 		if ( filepath.indexOf( "{{SOURCE}}" ) !== -1 ) {
 			filepath = filepath.replace( "{{SOURCE}}", anvil.config.working );
@@ -19,20 +18,25 @@ module.exports = function( _, anvil ) {
 			filepath = filepath.replace( "{{OUTPUT}}", anvil.config.output );
 		}
 
+		// Resolve full path for comparison purposes
 		filepath = path.resolve( filepath );
 
+		// If path starts with the source directory, substitute in the working path
 		if ( startsWith( filepath, anvil.config.source ) ) {
 			filepath = filepath.replace( anvil.config.source, anvil.config.working );
 		}
 
+		// Convert path to relative paths for the Compass config file.
 		filepath = path.relative( anvil.project.root, filepath );
 		return filepath;
 	},
 
 	rubify = function( value ) {
-		if (value.match( /^(true|false|nil)$/i ) || value.match( /^:/ ) ) {
+		// Test for true, false, nil, and symbols
+		if ( /^(true|false|nil)$/i.test( value ) || /^:/.test( value ) ) {
 			return value;
 		} else {
+			// Encase in quotes
 			return '"' + value + '"';
 		}
 	};
@@ -41,6 +45,7 @@ module.exports = function( _, anvil ) {
 		name: "anvil.compass",
 		activity: "pull",
 		dependencies: [ "anvil.workset" ],
+		// All possible Compass configuration options
 		config: {
 			"project_type": null,
 			"environment": null,
@@ -74,6 +79,15 @@ module.exports = function( _, anvil ) {
 			"sprite_engine": null,
 			"sprite_load_path": null
 		},
+		// Configuration keys that should not be written to compass.config.rb
+		config_exclude_keys: [
+			"config_file"
+		],
+		// The files from these directories will be excluded from anvil processing
+		file_exclude_dirs: [
+			"sass_dir",
+			"images_dir"
+		],
 		commander: [
 			[ "-C", "--compass", "run compass compiler"]
 		],
@@ -82,7 +96,6 @@ module.exports = function( _, anvil ) {
 
 		configure: function( config, command, done ) {
 			var self = this;
-
 
 			if ( this.config.config_file ) {
 				// Read in configuration from file and create new file
@@ -104,14 +117,19 @@ module.exports = function( _, anvil ) {
 		},
 
 		parseConfig: function( content, callback ) {
+			// At this point we have the contents of a Ruby configuration file
 			var lines,
 				cfg_obj = {};
 
-			lines = content.split(/\n/);
 
+			// Split file on line endings.
+			// @TODO: Test on Windows files
+			lines = content.split( /\n/ );
+
+			// Process lines into a JS configuration object
 			_.each(lines, function( line ) {
 				line = line.trim();
-				// Filter empty lines and comments
+				// Filter out empty lines and comments
 				if ( ! line || /^#/.test( line ) ) {
 					return false;
 				}
@@ -152,6 +170,7 @@ module.exports = function( _, anvil ) {
 			var self = this,
 				cfg_lines = [],
 				cfg_contents = '',
+				// Configuration paths that need to be resolved
 				to_resolve = [
 					"sass_dir",
 					"css_dir",
@@ -162,16 +181,29 @@ module.exports = function( _, anvil ) {
 					"http_fonts_dir"
 				];
 
+			// Prepare config object for writing to Ruby file
 			_.each( self.config, function(val, key, list) {
-				if ( ! _.isNull( val ) && key !== 'config_file' ) {
+				if ( ! _.isNull( val ) && ! _.contains( self.config_exclude_keys, key ) ) {
 					self.config[key] = _.contains( to_resolve, key ) ? resolve_path( val ) : val;
 					cfg_lines.push(key + " = " + rubify( self.config[key] ) );
 				}
 			});
 			
+			// Join file lines array into a string for writing to file
 			config_contents = cfg_lines.join("\r\n");
 			this.command_args.push( "--config=" + this.cfg_file );
 
+			// Figure out which directories we need to make anvil ignore
+			this.file_exclude_dirs = _.chain( this.file_exclude_dirs )
+				.reject( function( dir ) {
+					return _.isNull( self.config[ dir ] );
+				} )
+				.map( function( dir ) {
+					return path.resolve( self.config[ dir ] );
+				})
+				.value();
+
+			// Writing Compass configuration to file
 			anvil.fs.write( this.cfg_file, config_contents, function( err ) {
 				if ( err ) {
 					// Break build, couldn't create configuration file
@@ -184,32 +216,44 @@ module.exports = function( _, anvil ) {
 
 		run: function( done, activity ) {
 			var self = this,
-				full_sass_dir = path.resolve( self.config.sass_dir ),
-				sliceLength = full_sass_dir.length,
-				findSassFiles = function(file) {
-					var ext = file.extension();
-					return startsWith( file.workingPath, full_sass_dir, sliceLength ) && ( ext === '.sass' || ext === '.scss' );
+				inExcludedDir = function( file ) {
+					// Reject if the file path is within the excluded directories
+					var reject = false;
+					_.each( self.file_exclude_dirs, function( dir ) {
+						if ( startsWith( file.workingPath, dir ) ) {
+							reject = true;
+						}
+					});
+					return reject;
 				};
 
-			anvil.project.files = _.reject( anvil.project.files, findSassFiles );
+			anvil.project.files = _.reject( anvil.project.files, inExcludedDir );
 
 			try {
 				
+				// Execute Compass process
 				var compass = spawn( "compass", self.command_args ),
 					output = '';
 
 				compass.stdout.on( 'data', function (data) {
 					output += data;
 				});
-
 				
 				compass.stderr.on('data', function (data) {
-					//anvil.log.event("Error Received: ", data.toString());
+					anvil.log.debug("Compass Error: ", data.toString());
 				});
-				
 
 				compass.on( "exit", function( code ) {
-					anvil.log.event(output.toString());
+					anvil.log.event( "Compass Output" );
+					anvil.log.event( "----------------------" );
+					var lines = output.toString().split( /\n/ );
+					if ( lines ) {
+						_.each(lines, function( line ) {
+							anvil.log.event( line.trim() );
+						});
+					}
+					anvil.log.event( "----------------------" );
+					anvil.log.event( "Compass Compiling Complete" );
 					done();
 				});
 				
