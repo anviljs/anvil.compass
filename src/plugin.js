@@ -84,9 +84,9 @@ module.exports = function( _, anvil ) {
 			"config_file"
 		],
 		// The files from these directories will be excluded from anvil processing
+		// @TODO: Look at excluding by file extension
 		file_exclude_dirs: [
-			"sass_dir",
-			"images_dir"
+			{ "folder": "sass_dir", "pattern": "\\.(sass|scss)$"}
 		],
 		commander: [
 			[ "-C", "--compass", "run compass compiler"]
@@ -105,13 +105,13 @@ module.exports = function( _, anvil ) {
 						done();
 					} else {
 						self.parseConfig( content, function() {
-							self.writeConfigFile( done );
+							self.writeConfigFile( content, true, done );
 						} );
 					}
 				} );
 
 			} else {
-				this.writeConfigFile( done );
+				this.writeConfigFile( "", false, done );
 			}
 
 		},
@@ -166,7 +166,10 @@ module.exports = function( _, anvil ) {
 			callback();
 		},
 
-		writeConfigFile: function( callback ) {
+		writeConfigFile: function( prepended_content, resolved_paths_only, callback ) {
+			prepended_content = prepended_content || "";
+			resolved_paths_only = resolved_paths_only || false;
+
 			var self = this,
 				cfg_lines = [],
 				cfg_contents = '',
@@ -179,16 +182,31 @@ module.exports = function( _, anvil ) {
 					"fonts_dir",
 					"generated_images_dir",
 					"http_fonts_dir"
-				];
+				],
+				copyToFile = function(val, key) {
+					var copy = false;
+					if ( ! _.isNull( val ) && ! _.contains( self.config_exclude_keys, key ) ) {
+						if ( resolved_paths_only ) {
+							copy = _.contains( to_resolve, key );
+						} else {
+							copy = true;
+						}
+					}
+					return copy;
+				};
+
+			if ( prepended_content ) {
+				cfg_lines.push( prepended_content );
+			}
 
 			// Prepare config object for writing to Ruby file
 			_.each( self.config, function(val, key, list) {
-				if ( ! _.isNull( val ) && ! _.contains( self.config_exclude_keys, key ) ) {
+				if ( copyToFile( val, key ) ) {
 					self.config[key] = _.contains( to_resolve, key ) ? resolve_path( val ) : val;
 					cfg_lines.push(key + " = " + rubify( self.config[key] ) );
 				}
 			});
-			
+
 			// Join file lines array into a string for writing to file
 			config_contents = cfg_lines.join("\r\n");
 			this.command_args.push( "--config=" + this.cfg_file );
@@ -196,12 +214,15 @@ module.exports = function( _, anvil ) {
 			// Figure out which directories we need to make anvil ignore
 			this.file_exclude_dirs = _.chain( this.file_exclude_dirs )
 				.reject( function( dir ) {
-					return _.isNull( self.config[ dir ] );
+					return _.isNull( self.config[ dir.folder ] );
 				} )
 				.map( function( dir ) {
-					return path.resolve( self.config[ dir ] );
+					dir.folder = path.resolve( self.config[ dir.folder ] );
+					return dir;
 				})
 				.value();
+
+			console.log(this.file_exclude_dirs);
 
 			// Writing Compass configuration to file
 			anvil.fs.write( this.cfg_file, config_contents, function( err ) {
@@ -220,8 +241,9 @@ module.exports = function( _, anvil ) {
 					// Reject if the file path is within the excluded directories
 					var reject = false;
 					_.each( self.file_exclude_dirs, function( dir ) {
-						if ( startsWith( file.workingPath, dir ) ) {
-							reject = true;
+						if ( startsWith( file.workingPath, dir.folder ) ) {
+							var regex = new RegExp(dir.pattern);
+							reject = regex.test( file.name );
 						}
 					});
 					return reject;

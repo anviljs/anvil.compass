@@ -6,7 +6,7 @@
   },
   "name": "anvil.compass",
   "description": "Compass plugin for anvil.js",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "repository": {
     "type": "git",
     "url": "git://github.com/brianedgerton/anvil.compass.git"
@@ -23,6 +23,6 @@
   },
   "optionalDependencies": {},
   "readme": "## Anvil Compass Plugin\n\nThis plugin requires anvil.js version 0.8.* or greater.\n\n## Installation\n\n\tanvil install anvil.compass",
-  "_id": "anvil.haml@0.0.1",
-  "_from": "anvil.haml"
+  "_id": "anvil.compass@0.0.2",
+  "_from": "anvil.compass"
 }
