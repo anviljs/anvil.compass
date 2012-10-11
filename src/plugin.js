@@ -88,9 +88,6 @@ module.exports = function( _, anvil ) {
 		file_exclude_dirs: [
 			{ "folder": "sass_dir", "pattern": "\\.(sass|scss)$"}
 		],
-		commander: [
-			[ "-C", "--compass", "run compass compiler"]
-		],
 		cfg_file: anvil.config.working + "/compass.config.rb",
 		command_args: [ "compile", "." ],
 
@@ -222,14 +219,12 @@ module.exports = function( _, anvil ) {
 				})
 				.value();
 
-			console.log(this.file_exclude_dirs);
-
 			// Writing Compass configuration to file
 			anvil.fs.write( this.cfg_file, config_contents, function( err ) {
 				if ( err ) {
 					// Break build, couldn't create configuration file
-					anvil.log.error( err );
-					anvil.events.raise( "build.stop", "Error creating Compass configuration file" );
+					anvil.raise( "log.error", err );
+					anvil.raise( "build.stop", "Error creating Compass configuration file" );
 				}
 				callback();
 			});
@@ -266,16 +261,16 @@ module.exports = function( _, anvil ) {
 				});
 
 				compass.on( "exit", function( code ) {
-					anvil.log.event( "Compass Output" );
-					anvil.log.event( "----------------------" );
+					anvil.raise( "log.event", "Compass Output" );
+					anvil.raise( "log.event", "----------------------" );
 					var lines = output.toString().split( /\n/ );
 					if ( lines ) {
 						_.each(lines, function( line ) {
-							anvil.log.event( line.trim() );
+							anvil.raise( "log.event", line.trim() );
 						});
 					}
-					anvil.log.event( "----------------------" );
-					anvil.log.event( "Compass Compiling Complete" );
+					anvil.raise( "log.event", "----------------------" );
+					anvil.raise( "log.event", "Compass Compiling Complete" );
 					done();
 				});
 				
