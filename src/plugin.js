@@ -1,8 +1,18 @@
+/*
+	anvil.compass - Compass plugin for anvil.js
+	version: 0.0.2
+	author: [object Object]
+	copyright: 2012
+	license: Dual licensed 
+			 MIT (http://www.opensource.org/licenses/mit-license)
+			 GPL (http://www.opensource.org/licenses/gpl-license)
+*/
 var cp = require( "child_process" ),
 	spawn = cp.spawn,
 	exec = cp.exec,
 	path = require( "path" ),
-	nodefs = require( "fs" );
+	nodefs = require( "fs" ),
+	os = require('os');
 
 module.exports = function( _, anvil ) {
 
@@ -37,6 +47,10 @@ module.exports = function( _, anvil ) {
 			return value;
 		} else {
 			// Encase in quotes
+			var vals = value.split( "\\" );
+			if ( vals.length ) {
+				value = vals.join( "/" );
+			}
 			return '"' + value + '"';
 		}
 	};
@@ -89,6 +103,7 @@ module.exports = function( _, anvil ) {
 			{ "folder": "sass_dir", "pattern": "\\.(sass|scss)$"}
 		],
 		cfg_file: anvil.config.working + "/compass.config.rb",
+		command: os.type() === 'Windows_NT' ? "compass.bat" : "compass",
 		command_args: [],
 		output: [],
 
@@ -234,6 +249,7 @@ module.exports = function( _, anvil ) {
 					anvil.raise( "log.error", err );
 					anvil.raise( "build.stop", "Error creating Compass configuration file" );
 				}
+
 				callback();
 			});
 		},
@@ -263,7 +279,7 @@ module.exports = function( _, anvil ) {
 
 			try {
 				// Execute Compass process
-				var compass = spawn( "compass", self.command_args );
+				var compass = spawn( this.command, self.command_args );
 				compass.stdout.on( "data", onData );
 				compass.stderr.on( "data", this.onError );
 				compass.on( "exit", onExit );
@@ -280,8 +296,7 @@ module.exports = function( _, anvil ) {
 		},
 
 		onError: function( data ) {
-			//i have no idea why but compass pumps a huge binary stream to std err
-			// for now, I am doing nothing with it b/c it's garbage.
+			anvil.log.error( data.toString() );
 		},
 
 		onWatchData: function( data ) {
