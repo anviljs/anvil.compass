@@ -6,7 +6,7 @@
   },
   "name": "anvil.compass",
   "description": "Compass plugin for anvil.js",
-  "version": "0.0.3",
+  "version": "0.1.0",
   "repository": {
     "type": "git",
     "url": "git://github.com/brianedgerton/anvil.compass.git"
