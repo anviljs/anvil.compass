@@ -279,12 +279,11 @@ module.exports = function( _, anvil ) {
 
 			try {
 				// Execute Compass process
-				var compass = spawn( this.command, self.command_args );
+				var compass = this.compass = spawn( this.command, self.command_args );
 				compass.stdout.on( "data", onData );
 				compass.stderr.on( "data", this.onError );
 				compass.on( "exit", onExit );
 				this.runComplete = done;
-				this.compass = compass;
 				
 			} catch ( error ) {
 				done( "", error );
