@@ -38,6 +38,13 @@ module.exports = function( _, anvil ) {
 
 		// Convert path to relative paths for the Compass config file.
 		filepath = path.relative( anvil.project.root, filepath );
+
+		// Silly Windoze...
+        if ( path.sep === "\\" ) {
+            var regex =  new RegExp( path.sep + path.sep, "gi" );
+            filepath = filepath.replace( regex, "/" );
+        }
+        
 		return filepath;
 	},
 
@@ -279,7 +286,7 @@ module.exports = function( _, anvil ) {
 
 			try {
 				// Execute Compass process
-				var compass = this.compass = spawn( this.command, self.command_args );
+				var compass = spawn( process.platform === "win32" ? "compass.bat" : "compass", self.command_args );
 				compass.stdout.on( "data", onData );
 				compass.stderr.on( "data", this.onError );
 				compass.on( "exit", onExit );
