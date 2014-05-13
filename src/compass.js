@@ -1,18 +1,8 @@
-/*
-	anvil.compass - Compass plugin for anvil.js
-	version: 0.0.2
-	author: [object Object]
-	copyright: 2012
-	license: Dual licensed 
-			 MIT (http://www.opensource.org/licenses/mit-license)
-			 GPL (http://www.opensource.org/licenses/gpl-license)
-*/
 var cp = require( "child_process" ),
 	spawn = cp.spawn,
 	exec = cp.exec,
 	path = require( "path" ),
-	nodefs = require( "fs" ),
-	os = require('os');
+	nodefs = require( "fs" );
 
 module.exports = function( _, anvil ) {
 
@@ -47,10 +37,6 @@ module.exports = function( _, anvil ) {
 			return value;
 		} else {
 			// Encase in quotes
-			var vals = value.split( "\\" );
-			if ( vals.length ) {
-				value = vals.join( "/" );
-			}
 			return '"' + value + '"';
 		}
 	};
@@ -103,7 +89,6 @@ module.exports = function( _, anvil ) {
 			{ "folder": "sass_dir", "pattern": "\\.(sass|scss)$"}
 		],
 		cfg_file: anvil.config.working + "/compass.config.rb",
-		command: os.type() === 'Windows_NT' ? "compass.bat" : "compass",
 		command_args: [],
 		output: [],
 
@@ -249,7 +234,6 @@ module.exports = function( _, anvil ) {
 					anvil.raise( "log.error", err );
 					anvil.raise( "build.stop", "Error creating Compass configuration file" );
 				}
-
 				callback();
 			});
 		},
@@ -272,34 +256,43 @@ module.exports = function( _, anvil ) {
 				onExit = this.continuous ? this.onWatchExit : this.onCompileExit;
 
 			_.each( anvil.project.files, inExcludedDir );
+			
 			if( this.continuous && this.compass ) {
-				done();
+				this.runComplete = done;
 				return;
 			}
 
 			try {
 				// Execute Compass process
-				var compass = this.compass = spawn( this.command, self.command_args );
+				var compass = spawn( "compass", self.command_args );
 				compass.stdout.on( "data", onData );
 				compass.stderr.on( "data", this.onError );
 				compass.on( "exit", onExit );
 				this.runComplete = done;
-				
+				this.compass = compass;
+				this.timer = setTimeout( function() { done(); }, 1000 );
 			} catch ( error ) {
 				done( "", error );
 			}
 		},
 
 		onCompileData: function( data ) {
+			clearTimeout( this.timer );
 			this.output += data;
 		},
 
 		onError: function( data ) {
-			anvil.log.error( data.toString() );
+			//i have no idea why but compass pumps a huge binary stream to std err
+			// for now, I am doing nothing with it b/c it's garbage.
 		},
 
 		onWatchData: function( data ) {
-			anvil.log.event( "Compass: " + data );
+			clearTimeout( this.timer );
+			_.each( data.toString().split( '\n' ), function( line ) {
+				if( !_.isEmpty( line ) ) {
+					anvil.log.event( "Compass: " + line );
+				}
+			} );
 			if( this.runComplete ) {
 				this.runComplete();
 				this.runComplete = undefined;
